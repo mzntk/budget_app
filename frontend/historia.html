@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>Historia - Mój Budżet</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #faf8f5;
+            --card-bg: #ffffff;
+            --text-main: #2d3436;
+            --text-muted: #636e72;
+            --grad-mint: linear-gradient(135deg, #d4ffdf 0%, #baffc9 100%);
+            --grad-peach: linear-gradient(135deg, #ffe0e3 0%, #ffb3ba 100%);
+        }
+
+        * { 
+            box-sizing: border-box; 
+        }
+
+        body {
+            background-color: var(--bg-color);
+            font-family: 'DM Sans', sans-serif;
+            color: var(--text-main);
+            margin: 0;
+            padding: 30px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            max-width: 100vw; 
+            overflow-x: hidden;
+        }
+
+        header {
+            width: 100%;
+            max-width: 1000px;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-link {
+            text-decoration: none; color: var(--text-muted); font-weight: 600;
+            padding: 8px 16px; border-radius: 8px; transition: background 0.2s;
+            background: var(--card-bg); box-shadow: 0 2px 10px rgba(0,0,0,0.02);
+            text-align: center;
+        }
+        .nav-link:hover { transform: translateY(-2px); }
+
+        .card {
+            background: var(--card-bg); border-radius: 20px; padding: 24px;
+            width: 100%; max-width: 1000px; box-shadow: 0 4px 20px rgba(0,0,0,0.02);
+            overflow-x: auto;
+        }
+
+        .filters { 
+            display: flex; gap: 15px; margin-bottom: 20px; 
+            flex-wrap: wrap; 
+        }
+        
+        input, select {
+            padding: 10px 12px; border: 1px solid #eee; border-radius: 8px;
+            font-family: 'DM Sans', sans-serif; background-color: var(--bg-color);
+            flex: 1; min-width: 150px;
+        }
+
+        table { width: 100%; border-collapse: collapse; min-width: 600px; }
+        th, td { padding: 15px; text-align: left; border-bottom: 1px solid #eee; }
+        th { color: var(--text-muted); font-weight: 600; }
+        
+        .amount-pos { color: #0d4a22; font-weight: 700; background: var(--grad-mint); padding: 4px 10px; border-radius: 12px; }
+        .amount-neg { color: #8e1f2c; font-weight: 700; }
+        .tag { background: #eee; padding: 4px 10px; border-radius: 12px; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); }
+
+        .btn-delete {
+            background: none; border: none; cursor: pointer; font-size: 1.1rem;
+            transition: transform 0.2s; opacity: 0.7;
+        }
+        .btn-delete:hover { transform: scale(1.2); opacity: 1; }
+
+        @media (max-width: 1024px) {
+            header { 
+                flex-direction: column; 
+                gap: 15px; 
+                text-align: center; 
+            }
+            header div {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div>
+            <h1 style="margin: 0; font-weight: 700;">Historia Transakcji</h1>
+            <p style="margin: 5px 0 0 0; color: var(--text-muted); font-weight: 500;">Przeglądaj i filtruj swoje wydatki</p>
+        </div>
+        <div style="display: flex; gap: 15px; align-items: center;">
+            <a href="/api/export/csv/" download class="nav-link" style="background: var(--grad-mint); color: #0d4a22;">
+                📥 Eksportuj do CSV
+            </a>
+            <a href="index.html" class="nav-link">⬅ Powrót do Kokpitu</a>
+        </div>
+    </header>
+
+    <div class="card">
+        <div class="filters">
+            <input type="month" id="filter-month">
+            <select id="filter-category">
+                <option value="all">Wszystkie kategorie</option>
+            </select>
+            <input type="text" id="filter-search" placeholder="Szukaj po opisie lub sklepie..." style="flex-grow: 1;">
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Kategoria</th>
+                    <th>Sklep / Osoba</th>
+                    <th>Opis</th>
+                    <th style="text-align: right;">Kwota</th>
+                    <th style="text-align: right;">Akcje</th>
+                </tr>
+            </thead>
+            <tbody id="history-table-body">
+                <tr><td colspan="6" style="text-align:center; color:#636e72;">Ładowanie danych...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        let allTransactions = [];
+
+        // 1. Pobieranie danych z backendu
+        async function fetchHistory() {
+            try {
+                const response = await fetch('/api/history/');
+                allTransactions = await response.json();
+                
+                populateCategoryFilter();
+                renderTable(allTransactions);
+            } catch (error) {
+                console.error("Błąd pobierania historii:", error);
+                document.getElementById('history-table-body').innerHTML = '<tr><td colspan="6" style="text-align:center; color:#8e1f2c;">Błąd ładowania danych!</td></tr>';
+            }
+        }
+
+        // 2. Dynamiczne kategorie w filtrze
+        function populateCategoryFilter() {
+            const categorySelect = document.getElementById('filter-category');
+            const uniqueCategories = [...new Set(allTransactions.map(t => t.category))].sort();
+            
+            // Zachowujemy opcję "Wszystkie kategorie" i czyścimy resztę
+            categorySelect.innerHTML = '<option value="all">Wszystkie kategorie</option>';
+            
+            uniqueCategories.forEach(cat => {
+                const option = document.createElement('option');
+                option.value = cat;
+                option.innerText = cat;
+                categorySelect.appendChild(option);
+            });
+        }
+
+        // 3. Renderowanie wierszy tabeli
+        function renderTable(data) {
+            const tbody = document.getElementById('history-table-body');
+            tbody.innerHTML = '';
+
+            if (data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#636e72;">Brak transakcji pasujących do filtrów.</td></tr>';
+                return;
+            }
+
+            data.forEach(t => {
+                const isExpense = t.amount < 0;
+                const formattedAmount = Math.abs(t.amount).toFixed(2).replace('.', ',') + ' zł';
+                const amountHtml = isExpense 
+                    ? `<span class="amount-neg">- ${formattedAmount}</span>` 
+                    : `<span class="amount-pos">+ ${formattedAmount}</span>`;
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${t.date}</td>
+                    <td><span class="tag">${t.category}</span></td>
+                    <td><strong style="color: var(--text-main);">${t.counterparty || '-'}</strong></td>
+                    <td style="color: var(--text-muted);">${t.description || '-'}</td>
+                    <td style="text-align: right;">${amountHtml}</td>
+                    <td style="text-align: right;">
+                        <button class="btn-delete" onclick="deleteTransaction(${t.id})" title="Usuń">🗑️</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        async function deleteTransaction(id) {
+            if (confirm("Czy na pewno chcesz usunąć tę transakcję?")) {
+                try {
+                    const response = await fetch(`/api/transactions/${id}`, {
+                        method: 'DELETE'
+                    });
+                    if (response.ok) {
+                        fetchHistory(); // Odśwież tabelę po usunięciu
+                    } else {
+                        alert("Błąd podczas usuwania. Odśwież stronę.");
+                    }
+                } catch (error) {
+                    console.error("Błąd podczas usuwania:", error);
+                }
+            }
+        }
+
+        // 4. Logika filtrów (z ulepszonym wyszukiwaniem!)
+        function applyFilters() {
+            const month = document.getElementById('filter-month').value; 
+            const category = document.getElementById('filter-category').value;
+            const search = document.getElementById('filter-search').value.toLowerCase();
+
+            const filteredData = allTransactions.filter(t => {
+                const matchMonth = month ? t.date.startsWith(month) : true;
+                const matchCategory = category === 'all' ? true : t.category === category;
+                
+                // Wyszukiwanie uwzględnia teraz pole opisu ORAZ pole Sklep/Osoba
+                const descMatch = t.description ? t.description.toLowerCase().includes(search) : false;
+                const counterpartyMatch = t.counterparty ? t.counterparty.toLowerCase().includes(search) : false;
+                
+                const finalSearch = search === '' ? true : (descMatch || counterpartyMatch);
+
+                return matchMonth && matchCategory && finalSearch;
+            });
+
+            renderTable(filteredData);
+        }
+
+        // Nasłuchiwacze na zmiany filtrów
+        document.getElementById('filter-month').addEventListener('change', applyFilters);
+        document.getElementById('filter-category').addEventListener('change', applyFilters);
+        document.getElementById('filter-search').addEventListener('input', applyFilters);
+
+        // Uruchom na start
+        fetchHistory();
+    </script>
+</body>
+</html>

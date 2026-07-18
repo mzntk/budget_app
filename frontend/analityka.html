@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>Analityka - Mój Budżet</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root { --bg-color: #faf8f5; --card-bg: #ffffff; --text-main: #2d3436; --text-muted: #636e72; }
+        
+        * { box-sizing: border-box; }
+
+        body { 
+            background-color: var(--bg-color); 
+            font-family: 'DM Sans', sans-serif; 
+            color: var(--text-main); 
+            margin: 0; 
+            padding: 30px 20px; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            max-width: 100vw; 
+            overflow-x: hidden; 
+        }
+
+        header { 
+            width: 100%; 
+            max-width: 1200px; 
+            margin-bottom: 30px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+        }
+
+        .nav-link { 
+            text-decoration: none; color: var(--text-muted); font-weight: 600; 
+            padding: 8px 16px; border-radius: 8px; background: var(--card-bg); 
+            box-shadow: 0 2px 10px rgba(0,0,0,0.02); 
+        }
+        
+        /* Kontener do przewijania horyzontalnego */
+        .scroll-wrapper {
+            display: flex; gap: 30px; overflow-x: auto; padding-bottom: 30px; width: 100%; max-width: 1200px;
+            scroll-snap-type: x mandatory; scroll-behavior: smooth;
+        }
+        
+        /* Pasek przewijania */
+        .scroll-wrapper::-webkit-scrollbar { height: 12px; }
+        .scroll-wrapper::-webkit-scrollbar-track { background: #eee; border-radius: 10px; }
+        .scroll-wrapper::-webkit-scrollbar-thumb { background: #bae1ff; border-radius: 10px; }
+        .scroll-wrapper::-webkit-scrollbar-thumb:hover { background: #a2d2f7; }
+
+        .card { 
+            background: var(--card-bg); border-radius: 20px; padding: 24px; 
+            box-shadow: 0 4px 20px rgba(0,0,0,0.03); 
+            min-width: 800px; /* Szerokość pojedynczego ekranu z wykresem */
+            scroll-snap-align: center; flex-shrink: 0;
+            display: flex; flex-direction: column;
+        }
+        
+        /* Mniejsze karty dla specyficznych wykresów (np. radar, polar) */
+        .card-small { min-width: 450px; }
+
+        .card h2 { 
+            margin-top: 0; font-size: 1.1rem; color: var(--text-muted); 
+            border-bottom: 2px solid var(--bg-color); padding-bottom: 10px; 
+            margin-bottom: 20px; 
+        }
+        
+        .chart-container { position: relative; height: 350px; width: 100%; flex-grow: 1; }
+
+        /* Responsywność dla telefonów i tabletów */
+        @media (max-width: 1024px) {
+            header { flex-direction: column; gap: 15px; text-align: center; }
+            .card { min-width: 90vw; } /* Na małym ekranie karta zajmie 90% szerokości telefonu */
+            .card-small { min-width: 90vw; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div>
+            <h1 style="margin: 0; font-weight: 700;">Laboratorium Danych</h1>
+            <p style="margin: 5px 0 0 0; color: var(--text-muted); font-weight: 500;">Przewiń w prawo, by zobaczyć więcej (Shift + Scroll)</p>
+        </div>
+        <a href="index.html" class="nav-link">⬅ Powrót do Kokpitu</a>
+    </header>
+
+    <div class="scroll-wrapper">
+        <!-- 1. Skumulowany (Burn-up) -->
+        <div class="card">
+            <h2>1. Skumulowane wydatki w czasie (Burn-up chart)</h2>
+            <div class="chart-container"><canvas id="cumulativeChart"></canvas></div>
+        </div>
+
+        <!-- 2. Bąbelkowy -->
+        <div class="card">
+            <h2>2. Rozkład transakcji: Dzień vs Kwota (Bubble Chart)</h2>
+            <div class="chart-container"><canvas id="bubbleChart"></canvas></div>
+        </div>
+
+        <!-- 3. Mieszany (Trend vs Średnia) -->
+        <div class="card">
+            <h2>3. Dzienne spalanie budżetu vs Średnia (Mixed Chart)</h2>
+            <div class="chart-container"><canvas id="mixedChart"></canvas></div>
+        </div>
+
+        <!-- 4. Bar horyzontalny -->
+        <div class="card">
+            <h2>4. Ranking najwyższych kategorii (Horizontal Bar)</h2>
+            <div class="chart-container"><canvas id="hBarChart"></canvas></div>
+        </div>
+
+        <!-- 5. Step Line Chart -->
+        <div class="card">
+            <h2>5. Skoki wydatków (Step Line)</h2>
+            <div class="chart-container"><canvas id="stepChart"></canvas></div>
+        </div>
+
+        <!-- 6. Radar -->
+        <div class="card card-small">
+            <h2>6. Aktywność: Dni tygodnia (Radar)</h2>
+            <div class="chart-container"><canvas id="radarChart"></canvas></div>
+        </div>
+
+        <!-- 7. Biegunowy -->
+        <div class="card card-small">
+            <h2>7. Proporcje kategorii (Polar Area)</h2>
+            <div class="chart-container"><canvas id="polarChart"></canvas></div>
+        </div>
+        
+        <!-- 8. Zasada Pareto -->
+        <div class="card card-small">
+            <h2>8. Top 3 kategorie vs Reszta (Doughnut)</h2>
+            <div class="chart-container"><canvas id="paretoChart"></canvas></div>
+        </div>
+    </div>
+
+    <script>
+        async function loadAdvancedStats() {
+            try {
+                const response = await fetch('/api/advanced-stats/');
+                const data = await response.json();
+                
+                const catLabels = Object.keys(data.categories);
+                const catData = Object.values(data.categories);
+                const colors = ['#ffb3ba', '#baffc9', '#bae1ff', '#e6b3ff', '#fdfd96', '#ffdfba', '#d4ffdf', '#ffe0e3', '#e2f0cb', '#cddafd', '#ffc4d9', '#f3e5f5'];
+
+                const trendDates = Object.keys(data.daily_trend).sort();
+                const trendAmounts = trendDates.map(d => data.daily_trend[d]);
+                
+                // --- PRZYGOTOWANIE DANYCH ZŁOŻONYCH ---
+                
+                // Skumulowane sumy
+                let cumSum = 0;
+                const cumulativeData = trendAmounts.map(val => {
+                    cumSum += val;
+                    return cumSum;
+                });
+
+                // Średnia dzienna do wykresu Mixed
+                const avgValue = trendAmounts.length > 0 ? (trendAmounts.reduce((a,b)=>a+b,0) / trendAmounts.length) : 0;
+                const avgData = trendDates.map(() => avgValue);
+
+                // Pareto (Top 3 vs Inne)
+                const sortedCats = Object.entries(data.categories).sort((a,b) => b[1] - a[1]);
+                let top3Labels = sortedCats.slice(0,3).map(i => i[0]);
+                let top3Data = sortedCats.slice(0,3).map(i => i[1]);
+                let otherData = sortedCats.slice(3).reduce((acc, curr) => acc + curr[1], 0);
+                if(sortedCats.length > 3) {
+                    top3Labels.push('Reszta wydatków');
+                    top3Data.push(otherData);
+                }
+
+                // --- GENEROWANIE WYKRESÓW ---
+
+                // 1. Cumulative Chart
+                new Chart(document.getElementById('cumulativeChart').getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: trendDates,
+                        datasets: [{
+                            label: 'Skumulowana kwota wydatków (zł)',
+                            data: cumulativeData,
+                            borderColor: '#e6b3ff', backgroundColor: 'rgba(230, 179, 255, 0.2)',
+                            fill: true, tension: 0.4, borderWidth: 3
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+
+                // 2. Bubble Chart
+                new Chart(document.getElementById('bubbleChart').getContext('2d'), {
+                    type: 'bubble',
+                    data: {
+                        datasets: [{
+                            label: 'Transakcje w cyklu',
+                            data: data.bubble,
+                            backgroundColor: 'rgba(186, 225, 255, 0.6)',
+                            borderColor: '#bae1ff'
+                        }]
+                    },
+                    options: { 
+                        responsive: true, maintainAspectRatio: false,
+                        scales: { 
+                            x: { title: { display: true, text: 'Dzień miesiąca' } },
+                            y: { title: { display: true, text: 'Kwota (zł)' } }
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: function(ctx) { return `${ctx.raw.category}: ${ctx.raw.y} zł (Dzień: ${ctx.raw.x})`; }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // 3. Mixed Chart
+                new Chart(document.getElementById('mixedChart').getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: trendDates,
+                        datasets: [
+                            {
+                                type: 'line',
+                                label: 'Średnia dzienna',
+                                data: avgData,
+                                borderColor: '#8e1f2c', borderDash: [5, 5], borderWidth: 2, fill: false
+                            },
+                            {
+                                type: 'bar',
+                                label: 'Wydatki dzienne (zł)',
+                                data: trendAmounts,
+                                backgroundColor: '#ffb3ba', borderRadius: 4
+                            }
+                        ]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+
+                // 4. Horizontal Bar
+                new Chart(document.getElementById('hBarChart').getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: catLabels,
+                        datasets: [{
+                            label: 'Wydatki (zł)',
+                            data: catData,
+                            backgroundColor: colors, borderRadius: 6
+                        }]
+                    },
+                    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+                });
+
+                // 5. Step Line Chart
+                new Chart(document.getElementById('stepChart').getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: trendDates,
+                        datasets: [{
+                            label: 'Dynamika zmian',
+                            data: trendAmounts,
+                            borderColor: '#baffc9', borderWidth: 3,
+                            stepped: true, fill: false
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+
+                // 6. Radar Chart
+                const daysOrder = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek', 'Sobota', 'Niedziela'];
+                const radarData = daysOrder.map(day => data.weekdays[day] || 0);
+                new Chart(document.getElementById('radarChart').getContext('2d'), {
+                    type: 'radar',
+                    data: {
+                        labels: daysOrder,
+                        datasets: [{
+                            label: 'Aktywność (zł)',
+                            data: radarData,
+                            backgroundColor: 'rgba(253, 253, 150, 0.4)', borderColor: '#fdfd96', pointBackgroundColor: '#1a365d'
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+
+                // 7. Polar Area Chart
+                new Chart(document.getElementById('polarChart').getContext('2d'), {
+                    type: 'polarArea',
+                    data: { labels: catLabels, datasets: [{ data: catData, backgroundColor: colors }] },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+                
+                // 8. Pareto Chart (Doughnut)
+                new Chart(document.getElementById('paretoChart').getContext('2d'), {
+                    type: 'doughnut',
+                    data: { labels: top3Labels, datasets: [{ data: top3Data, backgroundColor: ['#ffb3ba', '#bae1ff', '#baffc9', '#eeee'] }] },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+
+            } catch (error) {
+                console.error("Błąd ładowania analityki", error);
+            }
+        }
+        
+        loadAdvancedStats();
+    </script>
+</body>
+</html>

@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>Planowanie - Mój Budżet</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #faf8f5; --card-bg: #ffffff; --text-main: #2d3436; --text-muted: #636e72;
+            --c-needs: #bae1ff; --c-wants: #ffb3ba; --c-savings: #e6b3ff;
+        }
+
+        * { 
+            box-sizing: border-box; 
+        }
+
+        body {
+            background-color: var(--bg-color); font-family: 'DM Sans', sans-serif;
+            color: var(--text-main); margin: 0; padding: 30px 20px; display: flex; flex-direction: column; align-items: center;
+            max-width: 100vw; overflow-x: hidden;
+        }
+
+        header { 
+            width: 100%; max-width: 1200px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; 
+        }
+        
+        .nav-link { 
+            text-decoration: none; color: var(--text-muted); font-weight: 600; padding: 8px 16px; border-radius: 8px; background: var(--card-bg); text-align: center;
+        }
+        
+        .dashboard { 
+            display: grid; grid-template-columns: 1fr 1fr; gap: 24px; max-width: 1200px; width: 100%; 
+        }
+        
+        .card { 
+            background-color: var(--card-bg); border-radius: 20px; padding: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.02); margin-bottom: 24px; 
+        }
+        
+        .card h2 { 
+            margin-top: 0; font-size: 1.2rem; color: var(--text-muted); border-bottom: 2px solid var(--bg-color); padding-bottom: 10px; margin-bottom: 20px; font-weight: 600; 
+        }
+
+        .form-group { 
+            margin-bottom: 15px; display: flex; flex-direction: column; position: relative; 
+        }
+        
+        label { 
+            font-size: 0.9rem; color: var(--text-muted); margin-bottom: 5px; font-weight: 600; display: flex; justify-content: space-between; align-items: center;
+        }
+        
+        .suggestion { 
+            color: #8e1f2c; font-size: 0.75rem; font-weight: 700; background: #ffe0e3; padding: 2px 8px; border-radius: 10px;
+        }
+        
+        /* Dodano obsługę select obok inputów */
+        input, select { 
+            padding: 10px 12px; border: 1px solid #eee; border-radius: 8px; font-size: 1rem; font-family: 'DM Sans', sans-serif; width: 100%;
+            background-color: var(--bg-color); color: var(--text-main);
+        }
+
+        .flex-row { display: flex; gap: 10px; }
+        .flex-row .form-group { flex: 1; margin-bottom: 8px; }
+
+        /* LEJEK BUDŻETOWY */
+        .funnel-container { height: 40px; border-radius: 10px; overflow: hidden; display: flex; margin-bottom: 10px; box-shadow: inset 0 2px 5px rgba(0,0,0,0.05); }
+        .funnel-part { display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem; transition: width 0.4s ease; text-align: center;}
+        .funnel-needs { background-color: var(--c-needs); color: #1a365d; }
+        .funnel-wants { background-color: var(--c-wants); color: #8e1f2c; }
+        .funnel-savings { background-color: var(--c-savings); color: #4a148c; }
+
+        .result-box { background: var(--bg-color); border-radius: 12px; padding: 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;}
+        .result-label { font-weight: 700; font-size: 1rem; }
+        .result-value { font-weight: 700; font-size: 1.2rem; }
+        
+        .savings-projection { background: linear-gradient(135deg, #f3e5f5 0%, #e6b3ff 100%); padding: 20px; border-radius: 15px; margin-top: 20px; color: #4a148c; }
+        .savings-math { display: flex; justify-content: space-between; align-items: center; font-size: 1.1rem; font-weight: 700; margin-top: 15px; flex-wrap: wrap; gap: 10px;}
+
+        @media (max-width: 1024px) {
+            header { 
+                flex-direction: column; 
+                gap: 15px; 
+            }
+            .dashboard { 
+                grid-template-columns: 1fr !important; 
+            }
+            .flex-row { 
+                flex-direction: column; 
+                gap: 0; 
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div>
+            <h1 style="margin: 0;">Planowanie Miesiąca</h1>
+            <p style="margin: 5px 0 0 0; color: var(--text-muted); font-weight: 500;" id="rule-status">Reguła: 50/30/20 (Suma: 100%)</p>
+        </div>
+        <a href="index.html" class="nav-link">⬅ Powrót do Kokpitu</a>
+    </header>
+
+    <div class="dashboard">
+        <!-- LEWA KOLUMNA: DANE WEJŚCIOWE -->
+        <div class="column">
+            
+            <div class="card">
+                <h2>1. Dochody i Proporcje Reguły</h2>
+                <div class="flex-row">
+                    <div class="form-group">
+                        <label>Zakładane godziny</label>
+                        <input type="number" id="calc-hours" value="80">
+                    </div>
+                    <div class="form-group">
+                        <label>Stawka netto</label>
+                        <input type="number" id="calc-rate" step="0.5" placeholder="np. 35">
+                    </div>
+                </div>
+
+                <label style="margin-top: 10px;">Dostosuj regułę (%)</label>
+                <div class="flex-row">
+                    <div class="form-group">
+                        <input type="number" id="rule-needs" value="50" style="border-bottom: 3px solid var(--c-needs)">
+                        <span style="font-size:0.8rem; text-align:center; margin-top:4px;">Potrzeby</span>
+                    </div>
+                    <div class="form-group">
+                        <input type="number" id="rule-wants" value="30" style="border-bottom: 3px solid var(--c-wants)">
+                        <span style="font-size:0.8rem; text-align:center; margin-top:4px;">Zachcianki</span>
+                    </div>
+                    <div class="form-group">
+                        <input type="number" id="rule-savings" value="20" style="border-bottom: 3px solid var(--c-savings)">
+                        <span style="font-size:0.8rem; text-align:center; margin-top:4px;">Oszczędności</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>2. Opłaty Sztywne & Bufor Celowy</h2>
+                
+                <div class="form-group">
+                    <label>Rata / Zobowiązania <span class="suggestion" id="sug-rata">Brak danych</span></label>
+                    <input type="number" id="cost-rata" value="241.62">
+                </div>
+                <div class="form-group">
+                    <label>Rachunki <span class="suggestion" id="sug-bills">Brak danych</span></label>
+                    <input type="number" id="cost-bills" value="0">
+                </div>
+                <div class="form-group">
+                    <label>Catering dietetyczny <span class="suggestion" id="sug-catering">Brak danych</span></label>
+                    <input type="number" id="cost-catering" value="0">
+                </div>
+                <div class="form-group">
+                    <label>Siłownia / Sport <span class="suggestion" id="sug-gym">Brak danych</span></label>
+                    <input type="number" id="cost-gym" value="0">
+                </div>
+                <div class="form-group">
+                    <label>Subskrypcje <span class="suggestion" id="sug-subs">Brak danych</span></label>
+                    <input type="number" id="cost-subs" value="0">
+                </div>
+                
+                <h3 style="font-size: 1rem; color: var(--text-main); margin: 20px 0 10px 0;">Bufor celowy (Wydatki nieregularne)</h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0; margin-bottom: 10px;">Zaplanuj cel i wybierz, z której puli go opłacisz.</p>
+                
+                <!-- 5 wierszy na bufor celowy z wyborem Puli -->
+                <div class="flex-row">
+                    <div class="form-group" style="flex: 2;"><input type="text" placeholder="1. Cel (np. Dentysta)"></div>
+                    <div class="form-group" style="flex: 1.5;">
+                        <select class="buffer-pool">
+                            <option value="needs">🏠 Potrzeby</option>
+                            <option value="wants">🎉 Zachcianki</option>
+                            <option value="savings">🏦 Oszczędności</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="flex: 1;"><input type="number" class="cost-buffer" value="0" placeholder="Kwota"></div>
+                </div>
+                <div class="flex-row">
+                    <div class="form-group" style="flex: 2;"><input type="text" placeholder="2. Cel (np. Prezent)"></div>
+                    <div class="form-group" style="flex: 1.5;">
+                        <select class="buffer-pool">
+                            <option value="needs">🏠 Potrzeby</option>
+                            <option value="wants" selected>🎉 Zachcianki</option>
+                            <option value="savings">🏦 Oszczędności</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="flex: 1;"><input type="number" class="cost-buffer" value="0" placeholder="Kwota"></div>
+                </div>
+                <div class="flex-row">
+                    <div class="form-group" style="flex: 2;"><input type="text" placeholder="3. Cel"></div>
+                    <div class="form-group" style="flex: 1.5;">
+                        <select class="buffer-pool">
+                            <option value="needs">🏠 Potrzeby</option>
+                            <option value="wants">🎉 Zachcianki</option>
+                            <option value="savings">🏦 Oszczędności</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="flex: 1;"><input type="number" class="cost-buffer" value="0" placeholder="Kwota"></div>
+                </div>
+                <div class="flex-row">
+                    <div class="form-group" style="flex: 2;"><input type="text" placeholder="4. Cel"></div>
+                    <div class="form-group" style="flex: 1.5;">
+                        <select class="buffer-pool">
+                            <option value="needs">🏠 Potrzeby</option>
+                            <option value="wants">🎉 Zachcianki</option>
+                            <option value="savings">🏦 Oszczędności</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="flex: 1;"><input type="number" class="cost-buffer" value="0" placeholder="Kwota"></div>
+                </div>
+                <div class="flex-row">
+                    <div class="form-group" style="flex: 2;"><input type="text" placeholder="5. Cel"></div>
+                    <div class="form-group" style="flex: 1.5;">
+                        <select class="buffer-pool">
+                            <option value="needs">🏠 Potrzeby</option>
+                            <option value="wants">🎉 Zachcianki</option>
+                            <option value="savings">🏦 Oszczędności</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="flex: 1;"><input type="number" class="cost-buffer" value="0" placeholder="Kwota"></div>
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- PRAWA KOLUMNA: WYNIKI I WIZUALIZACJA -->
+        <div class="column">
+            
+            <div class="card">
+                <h2>Wizualizacja: Lejek Budżetowy</h2>
+                
+                <div style="text-align: center; margin-bottom: 10px; font-weight: 700; font-size: 1.2rem;">
+                    Przewidywany wpływ: <span id="res-total" style="color: #0d4a22;">0,00 zł</span>
+                </div>
+
+                <div class="funnel-container">
+                    <div class="funnel-part funnel-needs" id="funnel-needs" style="width: 50%;">Potrzeby</div>
+                    <div class="funnel-part funnel-wants" id="funnel-wants" style="width: 30%;">Zachcianki</div>
+                    <div class="funnel-part funnel-savings" id="funnel-savings" style="width: 20%;">Oszcz.</div>
+                </div>
+
+                <div style="margin-top: 20px;">
+                    <!-- Wynik: Potrzeby -->
+                    <div class="result-box" style="border-left: 5px solid var(--c-needs);">
+                        <div>
+                            <div class="result-label">🏠 Pula na Potrzeby</div>
+                            <div style="font-size: 0.85rem; color: var(--text-muted);">- koszty stałe i bufor: <strong id="res-fixed-sum">0,00 zł</strong></div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div class="result-value" id="res-needs-left">0,00 zł</div>
+                            <div style="font-size: 0.8rem; color: var(--text-muted);">Zostaje na życie</div>
+                        </div>
+                    </div>
+
+                    <!-- Wynik: Zachcianki -->
+                    <div class="result-box" style="border-left: 5px solid var(--c-wants);">
+                        <div>
+                            <div class="result-label">🎉 Pula na Zachcianki</div>
+                            <div style="font-size: 0.85rem; color: var(--text-muted);">- odjęto bufor: <strong id="res-wants-deducted">0,00 zł</strong></div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div class="result-value" id="res-wants-left">0,00 zł</div>
+                            <div style="font-size: 0.8rem; color: var(--text-muted);">Zostaje na luzie</div>
+                        </div>
+                    </div>
+
+                    <!-- Wynik: Oszczędności -->
+                    <div class="result-box" style="border-left: 5px solid var(--c-savings);">
+                        <div>
+                            <div class="result-label">🏦 Pula Oszczędnościowa</div>
+                            <div style="font-size: 0.85rem; color: var(--text-muted);">- odjęto bufor: <strong id="res-savings-deducted">0,00 zł</strong></div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div class="result-value" id="res-savings-left">0,00 zł</div>
+                            <div style="font-size: 0.8rem; color: var(--text-muted);">Zostaje do odłożenia</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="savings-projection">
+                <h2 style="margin: 0 0 10px 0; border: none; color: #4a148c;">Połączenie z oszczędnościami</h2>
+                <div class="form-group" style="margin-bottom: 5px;">
+                    <label style="color: #4a148c;">Ile masz odłożone do tej pory? (zł)</label>
+                    <input type="number" id="current-savings" value="0" style="background: rgba(255,255,255,0.7); border: none;">
+                </div>
+                
+                <div class="savings-math">
+                    <span>Obecne: <span id="math-current">0</span> zł</span>
+                    <span>+</span>
+                    <span>Z tego m-ca: <span id="math-added">0</span> zł</span>
+                    <span>=</span>
+                    <span style="font-size: 1.4rem; background: #fff; padding: 4px 10px; border-radius: 8px;">
+                        <span id="math-future">0,00</span> zł
+                    </span>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // Pobieranie propozycji z backendu
+        async function fetchSuggestions() {
+            try {
+                const response = await fetch('/api/planning-suggestions/');
+                const data = await response.json();
+                
+                if (data['Rata']) document.getElementById('sug-rata').innerText = `Ostatnio: ${data['Rata'].toFixed(0)} zł`;
+                if (data['Rachunki']) document.getElementById('sug-bills').innerText = `Ostatnio: ${data['Rachunki'].toFixed(0)} zł`;
+                if (data['Catering dietetyczny']) document.getElementById('sug-catering').innerText = `Ostatnio: ${data['Catering dietetyczny'].toFixed(0)} zł`;
+                if (data['Siłownia / Sport']) document.getElementById('sug-gym').innerText = `Ostatnio: ${data['Siłownia / Sport'].toFixed(0)} zł`;
+                if (data['Subskrypcje']) document.getElementById('sug-subs').innerText = `Ostatnio: ${data['Subskrypcje'].toFixed(0)} zł`;
+            } catch (error) {
+                console.log('Brak historii do propozycji.');
+            }
+        }
+
+        // Główny kalkulator
+        function calculateBudget() {
+            // 1. Walidacja Reguły
+            const pNeeds = parseFloat(document.getElementById('rule-needs').value) || 0;
+            const pWants = parseFloat(document.getElementById('rule-wants').value) || 0;
+            const pSavings = parseFloat(document.getElementById('rule-savings').value) || 0;
+            const totalPercent = pNeeds + pWants + pSavings;
+            
+            const statusEl = document.getElementById('rule-status');
+            if (totalPercent !== 100) {
+                statusEl.innerText = `Błąd: Suma reguły wynosi ${totalPercent}% zamiast 100%!`;
+                statusEl.style.color = '#8e1f2c';
+            } else {
+                statusEl.innerText = `Reguła: ${pNeeds}/${pWants}/${pSavings} (Suma: 100%)`;
+                statusEl.style.color = 'var(--text-muted)';
+            }
+
+            // 2. Lejek CSS
+            document.getElementById('funnel-needs').style.width = `${pNeeds}%`;
+            document.getElementById('funnel-wants').style.width = `${pWants}%`;
+            document.getElementById('funnel-savings').style.width = `${pSavings}%`;
+
+            // 3. Obliczenia budżetu - dochody
+            const hours = parseFloat(document.getElementById('calc-hours').value) || 0;
+            const rate = parseFloat(document.getElementById('calc-rate').value) || 0;
+            const totalIncome = (hours * rate);
+
+            // Pobieranie kosztów stałych
+            const rata = parseFloat(document.getElementById('cost-rata').value) || 0;
+            const bills = parseFloat(document.getElementById('cost-bills').value) || 0;
+            const catering = parseFloat(document.getElementById('cost-catering').value) || 0;
+            const gym = parseFloat(document.getElementById('cost-gym').value) || 0;
+            const subs = parseFloat(document.getElementById('cost-subs').value) || 0;
+            
+            // ROZDZIAŁ BUFORÓW NA POSZCZEGÓLNE PULE
+            let bufferNeeds = 0;
+            let bufferWants = 0;
+            let bufferSavings = 0;
+
+            const bufferInputs = document.querySelectorAll('.cost-buffer');
+            const bufferSelects = document.querySelectorAll('.buffer-pool');
+
+            bufferInputs.forEach((input, index) => {
+                const val = parseFloat(input.value) || 0;
+                const pool = bufferSelects[index].value;
+                
+                if (pool === 'needs') bufferNeeds += val;
+                else if (pool === 'wants') bufferWants += val;
+                else if (pool === 'savings') bufferSavings += val;
+            });
+            
+            // Tylko koszty stałe i buffer z puli "Potrzeby" uszczuplają pierwszą kategorię
+            const totalFixedNeeds = rata + bills + catering + gym + subs + bufferNeeds;
+
+            // Kwoty całkowite dla pul
+            const budgetNeeds = totalIncome * (pNeeds / 100);
+            const budgetWants = totalIncome * (pWants / 100);
+            const budgetSavings = totalIncome * (pSavings / 100);
+            
+            // Ile faktycznie zostaje po odjęciu celów
+            const needsLeft = budgetNeeds - totalFixedNeeds;
+            const wantsLeft = budgetWants - bufferWants;
+            const savingsLeft = budgetSavings - bufferSavings;
+
+            // Aktualizacja DOM - Wartości ogólne
+            document.getElementById('res-total').innerText = totalIncome.toFixed(2).replace('.', ',') + ' zł';
+            document.getElementById('res-fixed-sum').innerText = totalFixedNeeds.toFixed(2).replace('.', ',') + ' zł';
+            document.getElementById('res-wants-deducted').innerText = bufferWants.toFixed(2).replace('.', ',') + ' zł';
+            document.getElementById('res-savings-deducted').innerText = bufferSavings.toFixed(2).replace('.', ',') + ' zł';
+            
+            // Kolorowanie i wypisywanie sald w pulach
+            const needsLeftEl = document.getElementById('res-needs-left');
+            if (needsLeft < 0) {
+                needsLeftEl.innerText = `Brak: ${Math.abs(needsLeft).toFixed(2).replace('.', ',')} zł`;
+                needsLeftEl.style.color = '#8e1f2c';
+            } else {
+                needsLeftEl.innerText = needsLeft.toFixed(2).replace('.', ',') + ' zł';
+                needsLeftEl.style.color = '#1a365d';
+            }
+
+            const wantsLeftEl = document.getElementById('res-wants-left');
+            if (wantsLeft < 0) {
+                wantsLeftEl.innerText = `Brak: ${Math.abs(wantsLeft).toFixed(2).replace('.', ',')} zł`;
+                wantsLeftEl.style.color = '#8e1f2c';
+            } else {
+                wantsLeftEl.innerText = wantsLeft.toFixed(2).replace('.', ',') + ' zł';
+                wantsLeftEl.style.color = 'var(--text-main)';
+            }
+
+            const savingsLeftEl = document.getElementById('res-savings-left');
+            if (savingsLeft < 0) {
+                savingsLeftEl.innerText = `Brak: ${Math.abs(savingsLeft).toFixed(2).replace('.', ',')} zł`;
+                savingsLeftEl.style.color = '#8e1f2c';
+            } else {
+                savingsLeftEl.innerText = savingsLeft.toFixed(2).replace('.', ',') + ' zł';
+                savingsLeftEl.style.color = 'var(--text-main)';
+            }
+
+            // 4. Sekcja oszczędnościowa (korzysta tylko z tego, co FAKTYCZNIE zostaje do odłożenia)
+            const currentSavings = parseFloat(document.getElementById('current-savings').value) || 0;
+            document.getElementById('math-current').innerText = currentSavings;
+            document.getElementById('math-added').innerText = savingsLeft.toFixed(0);
+            document.getElementById('math-future').innerText = (currentSavings + savingsLeft).toFixed(2).replace('.', ',');
+        }
+
+        // Eventy i start (nasłuchuje też list wyboru)
+        const inputsAndSelects = document.querySelectorAll('input, select');
+        inputsAndSelects.forEach(el => {
+            el.addEventListener('input', calculateBudget);
+            el.addEventListener('change', calculateBudget);
+        });
+
+        fetchSuggestions();
+        calculateBudget();
+    </script>
+</body>
+</html>
